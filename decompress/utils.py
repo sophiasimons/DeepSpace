@@ -28,6 +28,12 @@ def copy_source(file, output_dir):
 
 
 def broadcast_params(params):
+    # dist.broadcast requires CUDA backend (nccl); skip for single-process
+    # or non-CUDA (MPS/CPU) runs where all ranks already share the same weights.
+    if not dist.is_available() or not dist.is_initialized() or dist.get_world_size() <= 1:
+        return
+    if not torch.cuda.is_available():
+        return
     for param in params:
         dist.broadcast(param.data, src=0)
 
@@ -36,10 +42,14 @@ def init_processes(rank, size, fn, args):
     """ Initialize the distributed environment. """
     os.environ['MASTER_ADDR'] = args.master_address
     os.environ['MASTER_PORT'] = args.master_port
-    torch.cuda.set_device(args.local_rank)
+    if torch.cuda.is_available():
+        torch.cuda.set_device(args.local_rank)
+        backend = 'nccl'
+    else:
+        backend = 'gloo'  # gloo works on CPU and MPS (Mac)
     gpu = args.local_rank
     dist.init_process_group(
-        backend='nccl', init_method='env://', rank=rank, world_size=size)
+        backend=backend, init_method='env://', rank=rank, world_size=size)
     print(f"Rank {rank} initialized")
     fn(rank, gpu, args)
     dist.barrier()

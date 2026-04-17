@@ -44,7 +44,12 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    device = 'cuda:0'
+    if torch.cuda.is_available():
+        device = 'cuda:0'
+    elif torch.backends.mps.is_available():
+        device = 'mps'
+    else:
+        device = 'cpu'
 
     dataset = create_dataset(args)
 
@@ -57,7 +62,7 @@ if __name__ == "__main__":
                                              num_workers=4,  # cpu_count(),
                                              )
     for i, (x, _) in enumerate(tqdm(dataloader)):
-        x = x.to(device, non_blocking=True)
+        x = x.to(device, non_blocking=torch.cuda.is_available())
         x = (x + 1.) / 2.  # move to 0 - 1
         assert (0 <= x.min() and x.max() <= 1)
         for j, x in enumerate(x):

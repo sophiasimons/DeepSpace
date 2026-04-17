@@ -56,3 +56,11 @@ slurm*.err
 # pycache
 __pycache__
 .vscode
+
+# Model checkpoints and training outputs (too large for GitHub)
+*.pth
+*.pt
+*.ckpt
+decompress/content/
+Ground/content/
+benchmark/comparison_results/

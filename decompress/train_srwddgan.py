@@ -59,24 +59,25 @@ def train(rank, gpu, args):
     from score_sde.models.ncsnpp_generator_adagn import WaveletNCSNpp
 
     torch.manual_seed(args.seed + rank)
-    torch.cuda.manual_seed(args.seed + rank)
-    torch.cuda.manual_seed_all(args.seed + rank)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(args.seed + rank)
+        torch.cuda.manual_seed_all(args.seed + rank)
     
-    # use single GPU (debug)
-
-    # device = torch.device('cuda:{}'.format(gpu))
-
-    # use all GPUs
-
-    device = torch.device('cuda')
+    # auto-select device: CUDA > MPS (Apple Silicon) > CPU
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
+    elif torch.backends.mps.is_available():
+        device = torch.device('mps')
+    else:
+        device = torch.device('cpu')
+    print(f"Using device: {device}")
 
     batch_size = args.batch_size
 
 
     # experiment path creation
     exp = args.exp
-    # parent_dir = "content/gdrive/MyDrive/srwavediff/saved_info/srwavediff/{}".format(args.dataset)
-    parent_dir = "/mnt/raid0sata1/chuanhao/CA/decompress/SRWaveDiff/content/{}".format(args.dataset)
+    parent_dir = "content/{}".format(args.dataset)
     # dir of this script
     # current_dir = os.path.dirname(os.path.abspath(__file__))
     # #append the parent dir to the current dir
@@ -131,7 +132,7 @@ def train(rank, gpu, args):
                                               batch_size=batch_size,
                                               shuffle=False,
                                               num_workers=args.num_workers,
-                                              pin_memory=True,
+                                              pin_memory=torch.cuda.is_available(),
                                               sampler=train_sampler,
                                               drop_last=True)
 
@@ -140,7 +141,7 @@ def train(rank, gpu, args):
                                               batch_size=batch_size,
                                               shuffle=False,
                                               num_workers=args.num_workers,
-                                              pin_memory=True)
+                                              pin_memory=torch.cuda.is_available())
 
     test_samples = next(iter(test_data_loader)) # samples of the test set to every 2 epochs 
     test_hr_image = test_samples['HR'] # test hr_img
@@ -168,7 +169,8 @@ def train(rank, gpu, args):
                            act=nn.LeakyReLU(0.2), num_layers=args.num_disc_layers).to(device)
     elif args.dataset in ['multisp_all_red_16_256', 'deepred_13n_16_256', 'deepred_13n_2_32_256', 'cahq_16_128', 
                           'ca_16_128', 'green_16_128', 'green_16_256', 'deepgreen_16_128', 'deepgreensmall_16_128', 
-                          'deepredsmall_16_128', 'deepredsmall_32_128', 'deepgreen_16_256', 'celebahq_16_128', 'div2k_128_512', 'df2k_128_512']:
+                          'deepredsmall_16_128', 'deepredsmall_32_128', 'deepgreen_16_256', 'celebahq_16_128', 'div2k_128_512', 'df2k_128_512',
+                          'foundation_multi_region']:
         # large images disc
         print("GEN: {}, DISC: large images disc\n".format(gen_net))
         netD = disc_net[1](nc=args.num_channels, ngf=args.ngf,
@@ -193,9 +195,13 @@ def train(rank, gpu, args):
         optimizerD, args.num_epoch, eta_min=1e-5)
 
     # ddp
-    netG = nn.parallel.DistributedDataParallel(
-        netG, device_ids=[gpu], find_unused_parameters=True)
-    netD = nn.parallel.DistributedDataParallel(netD, device_ids=[gpu])
+    if torch.cuda.is_available():
+        netG = nn.parallel.DistributedDataParallel(
+            netG, device_ids=[gpu], find_unused_parameters=True)
+        netD = nn.parallel.DistributedDataParallel(netD, device_ids=[gpu])
+    else:
+        # MPS and CPU do not support distributed collective ops; skip DDP wrapping
+        pass
 
     # Wavelet Pooling
     if not args.use_pytorch_wavelet:
@@ -203,11 +209,11 @@ def train(rank, gpu, args):
         iwt = IDWT_2D("haar")
     else:
         print("Using pytorch_wavelets")
-        dwt = DWTForward(J=1, mode='zero', wave='haar').cuda()
-        iwt = DWTInverse(mode='zero', wave='haar').cuda()
+        dwt = DWTForward(J=1, mode='zero', wave='haar').to(device)
+        iwt = DWTInverse(mode='zero', wave='haar').to(device)
     num_levels = int(np.log2(args.ori_image_size // args.current_resolution))
 
-    test_sr = test_sr_image.to(device, non_blocking=True)
+    test_sr = test_sr_image.to(device, non_blocking=torch.cuda.is_available())
     # wavelet transform lr test_set images
     if not args.use_pytorch_wavelet:
         for i in range(num_levels):
@@ -247,8 +253,9 @@ def train(rank, gpu, args):
         
         # clean the gpu to make sure we don't run OOM
         del checkpoint
-        torch.cuda.empty_cache()
-        torch.cuda.empty_cache() 
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.empty_cache()
     else:
         global_step, epoch, init_epoch = 0, 0, 0
 
@@ -272,7 +279,7 @@ def train(rank, gpu, args):
             sr_image = data_dict['SR'] # sr_img - bicubic interpolated
 
             # sample from p(x_0)
-            x0 = hr_image.to(device, non_blocking=True)
+            x0 = hr_image.to(device, non_blocking=torch.cuda.is_available())
 
             # wavelet transform x0 - hr images
             if not args.use_pytorch_wavelet:
@@ -290,7 +297,7 @@ def train(rank, gpu, args):
             assert 0 < real_data.max() <= 1
 
             # sr images
-            sr = sr_image.to(device, non_blocking=True)
+            sr = sr_image.to(device, non_blocking=torch.cuda.is_available())
             
             # wavelet transform sr images
             if not args.use_pytorch_wavelet:
@@ -394,7 +401,7 @@ def train(rank, gpu, args):
                         optimizerG.swap_parameters_with_ema(
                             store_params_in_ema=True)
 
-                    torch.save(netG.state_dict(), os.path.join(
+                    torch.save({k: v.cpu() for k, v in netG.state_dict().items()}, os.path.join(
                         exp_path, 'netG_{}_iteration_{}.pth'.format(epoch,global_step)))
                     if args.use_ema:
                         optimizerG.swap_parameters_with_ema(
@@ -480,6 +487,11 @@ if __name__ == '__main__':
                         help='seed used for initialization')
 
     parser.add_argument('--resume', action='store_true', default=False)
+
+    parser.add_argument('--data_len', type=int, default=-1,
+                        help='number of images to use (-1 = all)')
+    parser.add_argument('--data_len_per_region', type=int, default=-1,
+                        help='cap on images per region for foundation_multi_region dataset (-1 = all)')
 
     parser.add_argument('--image_size', type=int, default=32,
                         help='size of image')

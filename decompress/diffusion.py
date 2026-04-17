@@ -46,7 +46,7 @@ def get_time_schedule(args, device):
     eps_small = 1e-3
     t = np.arange(0, n_timestep + 1, dtype=np.float64)
     t = t / n_timestep
-    t = torch.from_numpy(t) * (1. - eps_small) + eps_small
+    t = torch.from_numpy(t).float() * (1. - eps_small) + eps_small
     return t.to(device)
 
 
@@ -58,7 +58,7 @@ def get_sigma_schedule(args, device):
 
     t = np.arange(0, n_timestep + 1, dtype=np.float64)
     t = t / n_timestep
-    t = torch.from_numpy(t) * (1. - eps_small) + eps_small
+    t = torch.from_numpy(t).float() * (1. - eps_small) + eps_small
 
     if args.use_geometric:
         var = var_func_geometric(t, beta_min, beta_max)

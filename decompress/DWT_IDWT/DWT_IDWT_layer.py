@@ -79,12 +79,8 @@ class DWT_1D(Module):
             index += 2
         matrix_h = matrix_h[:, (self.band_length_half - 1):end]
         matrix_g = matrix_g[:, (self.band_length_half - 1):end]
-        if torch.cuda.is_available():
-            self.matrix_low = torch.Tensor(matrix_h).cuda()
-            self.matrix_high = torch.Tensor(matrix_g).cuda()
-        else:
-            self.matrix_low = torch.Tensor(matrix_h)
-            self.matrix_high = torch.Tensor(matrix_g)
+        self.matrix_low = torch.Tensor(matrix_h).to(self._device)
+        self.matrix_high = torch.Tensor(matrix_g).to(self._device)
 
     def forward(self, input):
         """
@@ -94,6 +90,7 @@ class DWT_1D(Module):
         :return: the low-frequency and high-frequency components of the input data
         """
         assert len(input.size()) == 3
+        self._device = input.device
         self.input_height = input.size()[-1]
         self.get_matrix()
         return DWTFunction_1D.apply(input, self.matrix_low, self.matrix_high)
@@ -147,12 +144,8 @@ class IDWT_1D(Module):
             index += 2
         matrix_h = matrix_h[:, (self.band_length_half - 1):end]
         matrix_g = matrix_g[:, (self.band_length_half - 1):end]
-        if torch.cuda.is_available():
-            self.matrix_low = torch.Tensor(matrix_h).cuda()
-            self.matrix_high = torch.Tensor(matrix_g).cuda()
-        else:
-            self.matrix_low = torch.Tensor(matrix_h)
-            self.matrix_high = torch.Tensor(matrix_g)
+        self.matrix_low = torch.Tensor(matrix_h).to(self._device)
+        self.matrix_high = torch.Tensor(matrix_g).to(self._device)
 
     def forward(self, L, H):
         """
@@ -161,6 +154,7 @@ class IDWT_1D(Module):
         :return: the original data
         """
         assert len(L.size()) == len(H.size()) == 3
+        self._device = L.device
         self.input_height = L.size()[-1] + H.size()[-1]
         self.get_matrix()
         return IDWTFunction_1D.apply(L, H, self.matrix_low, self.matrix_high)
@@ -231,16 +225,10 @@ class DWT_2D_tiny(Module):
         matrix_g_1 = matrix_g_1[:, (self.band_length_half - 1):end]
         matrix_g_1 = np.transpose(matrix_g_1)
 
-        if torch.cuda.is_available():
-            self.matrix_low_0 = torch.Tensor(matrix_h_0).cuda()
-            self.matrix_low_1 = torch.Tensor(matrix_h_1).cuda()
-            self.matrix_high_0 = torch.Tensor(matrix_g_0).cuda()
-            self.matrix_high_1 = torch.Tensor(matrix_g_1).cuda()
-        else:
-            self.matrix_low_0 = torch.Tensor(matrix_h_0)
-            self.matrix_low_1 = torch.Tensor(matrix_h_1)
-            self.matrix_high_0 = torch.Tensor(matrix_g_0)
-            self.matrix_high_1 = torch.Tensor(matrix_g_1)
+        self.matrix_low_0 = torch.Tensor(matrix_h_0).to(self._device)
+        self.matrix_low_1 = torch.Tensor(matrix_h_1).to(self._device)
+        self.matrix_high_0 = torch.Tensor(matrix_g_0).to(self._device)
+        self.matrix_high_1 = torch.Tensor(matrix_g_1).to(self._device)
 
     def forward(self, input):
         """
@@ -252,6 +240,7 @@ class DWT_2D_tiny(Module):
         :return: the low-frequency component of the input 2D data
         """
         assert len(input.size()) == 4
+        self._device = input.device
         self.input_height = input.size()[-2]
         self.input_width = input.size()[-1]
         self.get_matrix()
@@ -321,16 +310,10 @@ class DWT_2D(Module):
         matrix_g_1 = matrix_g_1[:, (self.band_length_half - 1):end]
         matrix_g_1 = np.transpose(matrix_g_1)
 
-        if torch.cuda.is_available():
-            self.matrix_low_0 = torch.Tensor(matrix_h_0).cuda()
-            self.matrix_low_1 = torch.Tensor(matrix_h_1).cuda()
-            self.matrix_high_0 = torch.Tensor(matrix_g_0).cuda()
-            self.matrix_high_1 = torch.Tensor(matrix_g_1).cuda()
-        else:
-            self.matrix_low_0 = torch.Tensor(matrix_h_0)
-            self.matrix_low_1 = torch.Tensor(matrix_h_1)
-            self.matrix_high_0 = torch.Tensor(matrix_g_0)
-            self.matrix_high_1 = torch.Tensor(matrix_g_1)
+        self.matrix_low_0 = torch.Tensor(matrix_h_0).to(self._device)
+        self.matrix_low_1 = torch.Tensor(matrix_h_1).to(self._device)
+        self.matrix_high_0 = torch.Tensor(matrix_g_0).to(self._device)
+        self.matrix_high_1 = torch.Tensor(matrix_g_1).to(self._device)
 
     def forward(self, input):
         """
@@ -342,6 +325,7 @@ class DWT_2D(Module):
         :return: the low-frequency and high-frequency components of the input 2D data
         """
         assert len(input.size()) == 4
+        self._device = input.device
         self.input_height = input.size()[-2]
         self.input_width = input.size()[-1]
         self.get_matrix()
@@ -412,16 +396,10 @@ class IDWT_2D(Module):
         matrix_g_0 = matrix_g_0[:, (self.band_length_half - 1):end]
         matrix_g_1 = matrix_g_1[:, (self.band_length_half - 1):end]
         matrix_g_1 = np.transpose(matrix_g_1)
-        if torch.cuda.is_available():
-            self.matrix_low_0 = torch.Tensor(matrix_h_0).cuda()
-            self.matrix_low_1 = torch.Tensor(matrix_h_1).cuda()
-            self.matrix_high_0 = torch.Tensor(matrix_g_0).cuda()
-            self.matrix_high_1 = torch.Tensor(matrix_g_1).cuda()
-        else:
-            self.matrix_low_0 = torch.Tensor(matrix_h_0)
-            self.matrix_low_1 = torch.Tensor(matrix_h_1)
-            self.matrix_high_0 = torch.Tensor(matrix_g_0)
-            self.matrix_high_1 = torch.Tensor(matrix_g_1)
+        self.matrix_low_0 = torch.Tensor(matrix_h_0).to(self._device)
+        self.matrix_low_1 = torch.Tensor(matrix_h_1).to(self._device)
+        self.matrix_high_0 = torch.Tensor(matrix_g_0).to(self._device)
+        self.matrix_high_1 = torch.Tensor(matrix_g_1).to(self._device)
 
     def forward(self, LL, LH, HL, HH):
         """
@@ -438,6 +416,7 @@ class IDWT_2D(Module):
         """
         assert len(LL.size()) == len(LH.size()) == len(
             HL.size()) == len(HH.size()) == 4
+        self._device = LL.device
         self.input_height = LL.size()[-2] + HH.size()[-2]
         self.input_width = LL.size()[-1] + HH.size()[-1]
         self.get_matrix()
@@ -517,20 +496,12 @@ class DWT_3D(Module):
         matrix_g_1 = matrix_g_1[:, (self.band_length_half - 1):end]
         matrix_g_1 = np.transpose(matrix_g_1)
         matrix_g_2 = matrix_g_2[:, (self.band_length_half - 1):end]
-        if torch.cuda.is_available():
-            self.matrix_low_0 = torch.Tensor(matrix_h_0).cuda()
-            self.matrix_low_1 = torch.Tensor(matrix_h_1).cuda()
-            self.matrix_low_2 = torch.Tensor(matrix_h_2).cuda()
-            self.matrix_high_0 = torch.Tensor(matrix_g_0).cuda()
-            self.matrix_high_1 = torch.Tensor(matrix_g_1).cuda()
-            self.matrix_high_2 = torch.Tensor(matrix_g_2).cuda()
-        else:
-            self.matrix_low_0 = torch.Tensor(matrix_h_0)
-            self.matrix_low_1 = torch.Tensor(matrix_h_1)
-            self.matrix_low_2 = torch.Tensor(matrix_h_2)
-            self.matrix_high_0 = torch.Tensor(matrix_g_0)
-            self.matrix_high_1 = torch.Tensor(matrix_g_1)
-            self.matrix_high_2 = torch.Tensor(matrix_g_2)
+        self.matrix_low_0 = torch.Tensor(matrix_h_0).to(self._device)
+        self.matrix_low_1 = torch.Tensor(matrix_h_1).to(self._device)
+        self.matrix_low_2 = torch.Tensor(matrix_h_2).to(self._device)
+        self.matrix_high_0 = torch.Tensor(matrix_g_0).to(self._device)
+        self.matrix_high_1 = torch.Tensor(matrix_g_1).to(self._device)
+        self.matrix_high_2 = torch.Tensor(matrix_g_2).to(self._device)
 
     def forward(self, input):
         """
@@ -538,6 +509,7 @@ class DWT_3D(Module):
         :return: the eight components of the input data, one low-frequency and seven high-frequency components
         """
         assert len(input.size()) == 5
+        self._device = input.device
         self.input_depth = input.size()[-3]
         self.input_height = input.size()[-2]
         self.input_width = input.size()[-1]
@@ -621,20 +593,12 @@ class IDWT_3D(Module):
         matrix_g_1 = matrix_g_1[:, (self.band_length_half - 1):end]
         matrix_g_1 = np.transpose(matrix_g_1)
         matrix_g_2 = matrix_g_2[:, (self.band_length_half - 1):end]
-        if torch.cuda.is_available():
-            self.matrix_low_0 = torch.Tensor(matrix_h_0).cuda()
-            self.matrix_low_1 = torch.Tensor(matrix_h_1).cuda()
-            self.matrix_low_2 = torch.Tensor(matrix_h_2).cuda()
-            self.matrix_high_0 = torch.Tensor(matrix_g_0).cuda()
-            self.matrix_high_1 = torch.Tensor(matrix_g_1).cuda()
-            self.matrix_high_2 = torch.Tensor(matrix_g_2).cuda()
-        else:
-            self.matrix_low_0 = torch.Tensor(matrix_h_0)
-            self.matrix_low_1 = torch.Tensor(matrix_h_1)
-            self.matrix_low_2 = torch.Tensor(matrix_h_2)
-            self.matrix_high_0 = torch.Tensor(matrix_g_0)
-            self.matrix_high_1 = torch.Tensor(matrix_g_1)
-            self.matrix_high_2 = torch.Tensor(matrix_g_2)
+        self.matrix_low_0 = torch.Tensor(matrix_h_0).to(self._device)
+        self.matrix_low_1 = torch.Tensor(matrix_h_1).to(self._device)
+        self.matrix_low_2 = torch.Tensor(matrix_h_2).to(self._device)
+        self.matrix_high_0 = torch.Tensor(matrix_g_0).to(self._device)
+        self.matrix_high_1 = torch.Tensor(matrix_g_1).to(self._device)
+        self.matrix_high_2 = torch.Tensor(matrix_g_2).to(self._device)
 
     def forward(self, LLL, LLH, LHL, LHH, HLL, HLH, HHL, HHH):
         """
@@ -652,6 +616,7 @@ class IDWT_3D(Module):
             LHL.size()) == len(LHH.size()) == 5
         assert len(HLL.size()) == len(HLH.size()) == len(
             HHL.size()) == len(HHH.size()) == 5
+        self._device = LLL.device
         self.input_depth = LLL.size()[-3] + HHH.size()[-3]
         self.input_height = LLL.size()[-2] + HHH.size()[-2]
         self.input_width = LLL.size()[-1] + HHH.size()[-1]
@@ -664,7 +629,7 @@ class IDWT_3D(Module):
 if __name__ == '__main__':
     dwt = DWT_2D("haar")
     iwt = IDWT_2D("haar")
-    x = torch.randn(3, 3, 24, 24).cuda()
+    x = torch.randn(3, 3, 24, 24).to('cuda' if torch.cuda.is_available() else ('mps' if torch.backends.mps.is_available() else 'cpu'))
     xll = x
     wavelet_list = []
     for i in range(3):

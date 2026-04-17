@@ -22,8 +22,56 @@ import torch
 import torchvision.transforms as transforms
 from torchvision import datasets
 from torchvision.datasets import CIFAR10, STL10
+from torch.utils.data import ConcatDataset
 
 from .LRHR_dataset import LRHRDataset
+
+
+class MultiRegionDataset(ConcatDataset):
+    """Concatenates LRHRDataset instances from multiple region directories.
+
+    Each sub-directory of ``root`` that contains the expected ``hr_<r_res>/``
+    sub-folder is treated as an independent region dataset and is combined into
+    a single dataset for foundation-model training.
+
+    Args:
+        root (str): Parent directory that holds one sub-folder per region,
+            e.g.  data/multi_region/  ├── deepgreen_16_256/
+                                       ├── deepred_16_256/
+                                       └── deepblue_16_256/
+        l_resolution (int): Low-resolution side.
+        r_resolution (int): High-resolution (target) side.
+        data_len_per_region (int): Cap on images taken from each region
+            (-1 = use all).
+    """
+
+    def __init__(self, root, l_resolution=16, r_resolution=256,
+                 data_len_per_region=-1):
+        region_datasets = []
+        for region_name in sorted(os.listdir(root)):
+            region_path = os.path.join(root, region_name)
+            hr_dir = os.path.join(region_path, 'hr_{}'.format(r_resolution))
+            if not os.path.isdir(hr_dir):
+                continue  # skip folders that don't look like a region dataset
+            ds = LRHRDataset(
+                dataroot=region_path,
+                datatype='img',
+                l_resolution=l_resolution,
+                r_resolution=r_resolution,
+                split='train',
+                data_len=data_len_per_region,
+                need_LR=False,
+            )
+            print(f"  [MultiRegionDataset] {region_name}: {len(ds)} images")
+            region_datasets.append(ds)
+
+        if not region_datasets:
+            raise RuntimeError(
+                f"No valid region sub-directories found under '{root}'. "
+                "Each sub-directory must contain an hr_<r_res>/ folder."
+            )
+        super().__init__(region_datasets)
+        print(f"[MultiRegionDataset] Total images across {len(region_datasets)} regions: {len(self)}")
 
 def num_samples(dataset, train):
     if dataset == 'celeba':
@@ -114,7 +162,7 @@ def create_dataset(args):
             l_resolution=args.l_resolution,
             r_resolution=args.h_resolution,
             split="train",
-            data_len=-1,
+            data_len=getattr(args, 'data_len', -1),
             need_LR=False
             )
         
@@ -215,6 +263,20 @@ def create_dataset(args):
             data_len=-1,
             need_LR=False
             )
+
+    # -----------------------------------------------------------------
+    # Foundation model: combines multiple region folders under args.datadir
+    # Each sub-folder must follow the standard hr_<res>/ sr_<l>_<h>/ layout.
+    # Use --data_len_per_region N to cap images per region (default: all).
+    # -----------------------------------------------------------------
+    elif args.dataset == 'foundation_multi_region':
+        data_len_per_region = getattr(args, 'data_len_per_region', -1)
+        dataset = MultiRegionDataset(
+            root=args.datadir,
+            l_resolution=args.l_resolution,
+            r_resolution=args.h_resolution,
+            data_len_per_region=data_len_per_region,
+        )
 
 
     return dataset

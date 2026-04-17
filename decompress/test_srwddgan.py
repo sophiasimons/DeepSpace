@@ -38,7 +38,13 @@ from pytorch_wavelets import DWTForward, DWTInverse
 # %%
 def sample_and_test(args):
     torch.manual_seed(args.seed)
-    device = 'cuda:0'
+    if torch.cuda.is_available():
+        device = 'cuda:0'
+    elif torch.backends.mps.is_available():
+        device = 'mps'
+    else:
+        device = 'cpu'
+    print(f"Using device: {device}")
 
     if args.dataset == 'celebahq_16_128':
         real_img_dir = 'pytorch_fid/celebahq128_stats.npz'
@@ -77,8 +83,8 @@ def sample_and_test(args):
         dwt = DWT_2D("haar")
         iwt = IDWT_2D("haar")
     else:
-        dwt = DWTForward(J=1, mode='zero', wave='haar').cuda()
-        iwt = DWTInverse(mode='zero', wave='haar').cuda()
+        dwt = DWTForward(J=1, mode='zero', wave='haar').to(device)
+        iwt = DWTInverse(mode='zero', wave='haar').to(device)
     num_levels = int(np.log2(args.ori_image_size // args.current_resolution))
 
 
@@ -108,15 +114,17 @@ def sample_and_test(args):
                                               batch_size=args.batch_size,
                                               shuffle=False,
                                               num_workers=0,
-                                              pin_memory=True)
+                                              pin_memory=torch.cuda.is_available())
 
 
     if args.measure_time: # inference time eval
         x_t_1 = torch.randn(1, int(args.num_channels / 2),
                             args.image_size, args.image_size).to(device)
         # INIT LOGGERS
-        starter, ender = torch.cuda.Event(
-            enable_timing=True), torch.cuda.Event(enable_timing=True)
+        import time
+        use_cuda_timer = torch.cuda.is_available()
+        if use_cuda_timer:
+            starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
         repetitions = 300
         timings = np.zeros((repetitions, 1))
         # GPU-WARM-UP
@@ -132,7 +140,7 @@ def sample_and_test(args):
                 sample = next(iter(test_data_loader)) # samples of the test set to every 2 epochs 
                 lr = sample['SR'] 
 
-                lr = lr.to(device, non_blocking=True)
+                lr = lr.to(device, non_blocking=torch.cuda.is_available())
                 # wavelet transform lr image
                 if not args.use_pytorch_wavelet:
                     for iti in range(num_levels):
@@ -146,7 +154,10 @@ def sample_and_test(args):
                 assert -1 <= lrw.min() < 0
                 assert 0 < lrw.max() <= 1
 
-                starter.record()
+                if use_cuda_timer:
+                    starter.record()
+                else:
+                    t0 = time.perf_counter()
                 resoluted = sample_from_model(
                     pos_coeff, netG, args.num_timesteps, x_t_1, lrw, T, args)
 
@@ -158,10 +169,12 @@ def sample_and_test(args):
                     resoluted = iwt((resoluted[:, :3], [torch.stack(
                         (resoluted[:, 3:6], resoluted[:, 6:9], resoluted[:, 9:12]), dim=2)]))
                 resoluted = torch.clamp(resoluted, -1, 1)
-                ender.record()
-                # WAIT FOR GPU SYNC
-                torch.cuda.synchronize()
-                curr_time = starter.elapsed_time(ender)
+                if use_cuda_timer:
+                    ender.record()
+                    torch.cuda.synchronize()
+                    curr_time = starter.elapsed_time(ender)
+                else:
+                    curr_time = (time.perf_counter() - t0) * 1000  # ms
                 timings[rep] = curr_time
         mean_syn = np.sum(timings) / repetitions
         std_syn = np.std(timings)
@@ -174,7 +187,7 @@ def sample_and_test(args):
                 sample = next(iter(test_data_loader))
                 lr = sample['SR'] 
                 
-                lr = lr.to(device, non_blocking=True)
+                lr = lr.to(device, non_blocking=torch.cuda.is_available())
                 # wavelet transform lr image
                 if not args.use_pytorch_wavelet:
                     for iti in range(num_levels):
@@ -222,7 +235,7 @@ def sample_and_test(args):
                 hr = sample['HR'] 
                 lr = sample['SR'] 
 
-                lr = lr.to(device, non_blocking=True)
+                lr = lr.to(device, non_blocking=torch.cuda.is_available())
                 # wavelet transform LR image
                 if not args.use_pytorch_wavelet:
                     for iti in range(num_levels):
