@@ -47,7 +47,8 @@ class LRHRDataset(Dataset):
             if self.need_LR:
                 self.lr_path = Util.get_paths_from_images(
                     '{}/lr_{}'.format(dataroot, l_resolution))
-            self.dataset_len = len(self.hr_path)
+            self.dataset_len = min(len(self.hr_path), len(self.sr_path),
+                                   len(self.lr_path) if self.need_LR else len(self.hr_path))
             if self.data_len <= 0:
                 self.data_len = self.dataset_len
             else:
